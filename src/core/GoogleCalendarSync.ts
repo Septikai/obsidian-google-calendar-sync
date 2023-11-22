@@ -11,12 +11,14 @@ import {FullCalendarEvent} from "./FullCalendarSync";
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
+const OBSIDIAN_LINK_REGEX = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)/g
 
 export interface GoogleCalendarEvent {
 	id: string;
 	date: string;
 	summary: string;
 	description: string;
+	link: string;
 }
 
 export class GoogleCalendarSync {
@@ -109,12 +111,17 @@ export class GoogleCalendarSync {
 
 		events.filter(notEmpty).map((event: any) => {
 			if (!(this.eventDb.find(e => e["id"] == event["id"]))) {
-				this.eventDb.push({
+				const desc = "description" in event ? event["description"] : "";
+				const matches = OBSIDIAN_LINK_REGEX.exec(desc);
+				const eventPayload = {
 					"id": event["id"],
 					"date": "date" in event["start"] ? event["start"]["date"] : event["start"]["dateTime"].split("T")[0],
 					"summary": "summary" in event ? event["summary"] : "Untitled",
-					"description": "description" in event ? event["description"] : ""
-				});
+					"description": desc,
+					"link": matches ? matches[1] : ""
+				}
+				this.eventDb.push(eventPayload);
+				this.plugin.full_calendar_sync.addFullCalendarEventToDb(eventPayload);
 			}
 		});
 		console.log(this.eventDb);
@@ -154,6 +161,10 @@ export class GoogleCalendarSync {
 			if (err) console.log(`GoogleCalendarSync Error Adding Event: ${event.name} on ${event.date}\n${err}`);
 			else {
 				that.plugin.full_calendar_sync.updateFullCalendarEventFile(file, {"synced-to-google": true, "google-id": event.data.id});
+				e.id = event.data.id;
+				that.plugin.full_calendar_sync.addFullCalendarEventToDb(e);
+				console.log("Full Calendar DB:")
+				console.log(that.plugin.full_calendar_sync.eventDb);
 			}
 		});
 		this.checkFullCalendarIcsEventsForCopies();

@@ -12,7 +12,7 @@ export interface FullCalendarEvent {
 }
 
 export class FullCalendarSync {
-	private eventDb = new Array<FullCalendarEvent>();
+	public eventDb = new Array<FullCalendarEvent>();
 
 	constructor(private plugin: GoogleCalendarSyncPlugin) {
 
@@ -20,6 +20,10 @@ export class FullCalendarSync {
 
 	async setup() {
 
+	}
+
+	public addFullCalendarEventToDb(event: FullCalendarEvent) {
+		this.eventDb.push(event);
 	}
 
 	public updateFullCalendarEventFile(file: TFile, fm?: object, desc?: string) {
