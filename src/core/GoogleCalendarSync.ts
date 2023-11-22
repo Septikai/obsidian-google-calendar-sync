@@ -5,16 +5,14 @@ import {authenticate} from "@google-cloud/local-auth";
 import {calendar_v3, google} from "googleapis"
 import {OAuth2Client} from "google-auth-library";
 import {JSONClient} from "google-auth-library/build/src/auth/googleauth";
-import {oauth2_v2} from "googleapis";
-import * as process from "process";
-import {end} from "@popperjs/core";
 import {TFile} from "obsidian";
+import {FullCalendarEvent} from "./FullCalendarSync";
 
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 
-interface GoogleCalendarEvent {
+export interface GoogleCalendarEvent {
 	id: string;
 	date: string;
 	summary: string;
@@ -76,11 +74,11 @@ export class GoogleCalendarSync {
 	 * From https://developers.google.com/calendar/api/quickstart/nodejs
 	 */
 	async authorise() {
-		let client = await this.loadSavedCredentialsIfExist();
+		const client = await this.loadSavedCredentialsIfExist();
 		if (client) {
 			return client;
 		}
-		let oAuthClient = await authenticate({
+		const oAuthClient = await authenticate({
 			scopes: SCOPES,
 			keyfilePath: this.credentialsPath,
 		});
@@ -91,7 +89,7 @@ export class GoogleCalendarSync {
 	}
 
 	async initialiseCalendarField(auth: OAuth2Client) {
-        this.calendar = google.calendar({version: 'v3', auth: auth});
+        this.calendar = google.calendar({version: "v3", auth: auth});
         await this.fetchGoogleCalendarEvents();
 	}
 
@@ -122,43 +120,41 @@ export class GoogleCalendarSync {
 		console.log(this.eventDb);
 	}
 
-	checkAddCalendarEvent(name: string, date: string, fileLink: string, file: TFile) {
-		let event = this.eventDb.find((e) => e.date === date && e.summary === name);
-		if (event === undefined) {
-			this.addCalendarEvent(name, date, fileLink, file);
+	checkAddCalendarEvent(event: FullCalendarEvent, file: TFile) {
+		const storedEvent = this.eventDb.find((e) => e.date === event.date && e.summary === event.summary);
+		if (storedEvent === undefined) {
+			this.addCalendarEvent(event, file);
 		} else {
-
+			// TODO
 		}
 	}
 
-	addCalendarEvent(name: string, date: string, fileLink: string, file: TFile) {
-		let endDate =  new Date(date);
+	addCalendarEvent(e: FullCalendarEvent, file: TFile) {
+		const endDate =  new Date(e.date);
 		endDate.setDate(endDate.getDate() + 1);
-		let event = {
-			"summary": name,
+		const event = {
+			"summary": e.summary,
 			"start": {
-				"date": date,
+				"date": e.date,
 				"timezone": "UTC"
 			},
 			"end": {
-				"date": date,
+				"date": e.date,
 				"timezone": "UTC"
 			},
-			"description": fileLink
+			"description": e.description
 		}
-		let that = this;
+		// eslint-disable-next-line @typescript-eslint/no-this-alias
+		const that = this;
 		this.calendar.events.insert({
-			calendarId: "primary",
-			requestBody: event
-		}, function (err: any, event: any) {
-			console.log(1)
-			if (err) console.log(`GoogleCalendarSync Error Adding Event: ${name} on ${date}\n${err}`);
-			else that.plugin.app.fileManager.processFrontMatter(file, (f: any) => {
-				console.log(event);
-				f["synced-to-google"] = true;
-				f["google-id"] = event.data.id;
-				return f;
-			});
+				calendarId: "primary",
+				requestBody: event
+			},
+			function (err: any, event: any) {
+			if (err) console.log(`GoogleCalendarSync Error Adding Event: ${event.name} on ${event.date}\n${err}`);
+			else {
+				that.plugin.full_calendar_sync.updateFullCalendarEventFile(file, {"synced-to-google": true, "google-id": event.data.id});
+			}
 		});
 		this.checkFullCalendarIcsEventsForCopies();
 	}

@@ -1,10 +1,12 @@
-// Credits go to SilentVoid13's Templater Plugin: https://github.com/SilentVoid13/Templater
-
-import {App, normalizePath, TAbstractFile, TFile, TFolder, Vault} from "obsidian";
+import {normalizePath, TAbstractFile, TFile, TFolder, Vault} from "obsidian";
 import {PluginError} from "./Error";
-import MyPlugin from "../main";
+import GoogleCalendarSyncPlugin from "../main";
 
-export function resolve_tfolder(folder_str: string, plugin: MyPlugin): TFolder {
+
+/**
+ * Credits go to SilentVoid13's Templater Plugin: https://github.com/SilentVoid13/Templater
+ */
+export function resolve_tfolder(folder_str: string, plugin: GoogleCalendarSyncPlugin): TFolder {
 	folder_str = normalizePath(folder_str);
 	const folder = plugin.app.vault.getAbstractFileByPath(folder_str);
 	if (!folder) {
@@ -17,7 +19,10 @@ export function resolve_tfolder(folder_str: string, plugin: MyPlugin): TFolder {
 	return folder;
 }
 
-export function get_tfiles_from_folder(folder_str: string, plugin: MyPlugin): Array<TFile> {
+/**
+ * Credits go to SilentVoid13's Templater Plugin: https://github.com/SilentVoid13/Templater
+ */
+export function get_tfiles_from_folder(folder_str: string, plugin: GoogleCalendarSyncPlugin): Array<TFile> {
 	const folder = resolve_tfolder(folder_str, plugin);
 
 	const files: Array<TFile> = [];

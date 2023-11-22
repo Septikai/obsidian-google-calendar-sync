@@ -1,12 +1,14 @@
 import {Plugin, TAbstractFile, TFile} from 'obsidian';
 import {DEFAULT_SETTINGS, Settings, SettingTab} from "./settings/Settings";
 import {GoogleCalendarSync} from "./core/GoogleCalendarSync";
+import {FullCalendarEvent, FullCalendarSync} from "./core/FullCalendarSync";
 
-const CALENDAR_EVENT_REGEX = /^(\d{4}-\d{2}-\d{2})(.*).md/g;
+
 
 export default class GoogleCalendarSyncPlugin extends Plugin {
 	public settings: Settings;
 	public google_calendar_sync: GoogleCalendarSync;
+	public full_calendar_sync: FullCalendarSync;
 
 	async onload() {
 		await this.loadSettings();
@@ -16,6 +18,10 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		this.google_calendar_sync = new GoogleCalendarSync(this)
 
 		await this.google_calendar_sync.setup();
+
+		this.full_calendar_sync = new FullCalendarSync(this)
+
+		await this.full_calendar_sync.setup();
 
 		this.app.workspace.onLayoutReady(() => {
 			this.registerEvent(this.app.vault.on("create", (file: TAbstractFile) => {
@@ -59,17 +65,9 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 
 	private onFileCreate(file: TAbstractFile) {
 		if (file.path.split("/").slice(0, -1).join("/") !== this.settings.directory || !(file instanceof TFile)) return;
-		let matches = CALENDAR_EVENT_REGEX.exec(file.name)
-		if (matches) {
-			this.app.fileManager.processFrontMatter(file, (f) => {
-				f["synced-to-google"] = false;
-				return f;
-			});
-			let name = matches[2].trim().length > 0 ? matches[2].trim() : "Untitled";
-			let date = matches[1];
-			let fileLink = `obsidian://open?vault=${this.app.vault.getName()}&file=${file.name.replace(".md", "")}`;
-			this.google_calendar_sync.checkAddCalendarEvent(name, date, fileLink, file);
-		}
+		const event: FullCalendarEvent | null = this.full_calendar_sync.parseFullCalendarEvent(file);
+		if (event === null) return;
+		this.google_calendar_sync.checkAddCalendarEvent(event, file);
 	}
 
 	private onFileModify(file: TAbstractFile) {
