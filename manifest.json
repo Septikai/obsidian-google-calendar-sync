@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-google-calendar-sync",
+	"name": "Obsidian Google Calendar Sync",
+	"version": "0.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "This is a plugin to sync events from Full Calendar to Google Calendar",
+	"author": "Septikai",
+	"authorUrl": "https://septikai.me",
+	"isDesktopOnly": false
+}
