@@ -47,8 +47,8 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		// 30 Minutes
-		this.registerInterval(window.setInterval(async () => await this.updateGoogleCalendarCache(), 1000 * 60 * 30));
+		// 10 Minutes
+		this.registerInterval(window.setInterval(async () => await this.updateGoogleCalendarCache(), 1000 * 60 * 10));
 	}
 
 	onunload() {

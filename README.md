@@ -16,11 +16,11 @@ This is intended to be used at the same time as an ICS link in Full Calendar.
 
 ## Current State
 
-This is very early in development currently, and at the time of writing is only capable of adding events created in obsidian to Google calendar. Which then leads to them showing up twice as they are both in obsidian and in Google Calendar, which is read by Full Calendar using the ICS link.
+This is very early in development currently, and at the time of writing is only capable of adding full-day events created in obsidian to Google calendar, and syncing modifications from Obsidian to Google Calendar for full-day events. Which then leads to them showing up twice as they are both in obsidian and in Google Calendar, which is read by Full Calendar using the ICS link.
 
 ## Installation
 
-In its current state, this is not intended for installation. If you decide to install it anyway, good luck. I'll write installation instructions when this is in a usable state. I can direct you to [this](https://developers.google.com/calendar/api/quickstart/nodejs) quickstart guide by Google though, as you will need to follow all steps there up until you have a `credentials.json` file in order to use this plugin.
+In its current state, this is not intended for installation. If you decide to install it anyway, good luck. I'll write installation instructions when this reaches a usable state. I can direct you to [this](https://developers.google.com/calendar/api/quickstart/nodejs) quickstart guide by Google though for if you do decide to install it, as you will need to follow all steps there up until you have a `credentials.json` file in order to use this plugin thanks to how Google Calendar's API works.
 
 ## Disclaimer
 

@@ -122,6 +122,8 @@ export class GoogleCalendarSync {
 				}
 				this.eventDb.push(eventPayload);
 				this.plugin.full_calendar_sync.addFullCalendarEventToDb(eventPayload);
+			} else {
+				// TODO: update event locally when modified externally
 			}
 		});
 	}
@@ -185,13 +187,14 @@ export class GoogleCalendarSync {
 			"eventId": id,
 			"requestBody": eventPayload
 		});
+		this.eventDb[this.eventDb.findIndex((e) => e.id === id)] = event;
 	}
 
 	public syncFullCalendarEventToGoogle(id: string) {
 		const event = this.plugin.full_calendar_sync.getFullCalendarEventById(id);
 		if (event === undefined) return;
 		this.updateCalendarEvent(id, event);
-		this.eventDb[this.eventDb.findIndex((e, i, o) => e.id === id)] = event;
+		this.eventDb[this.eventDb.findIndex((e) => e.id === id)] = event;
 	}
 
 	checkFullCalendarIcsEventsForCopies() {
