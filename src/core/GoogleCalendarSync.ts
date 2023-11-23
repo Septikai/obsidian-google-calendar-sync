@@ -124,7 +124,6 @@ export class GoogleCalendarSync {
 				this.plugin.full_calendar_sync.addFullCalendarEventToDb(eventPayload);
 			}
 		});
-		console.log(this.eventDb);
 	}
 
 	checkAddCalendarEvent(event: FullCalendarEvent, file: TFile) {
@@ -132,7 +131,7 @@ export class GoogleCalendarSync {
 		if (storedEvent === undefined) {
 			this.addCalendarEvent(event, file);
 		} else {
-			// TODO
+			console.error(`GoogleCalendarSync Error Adding Event: Tried adding ${event.summary} on ${event.date} but it already exists`);
 		}
 	}
 
@@ -158,16 +157,41 @@ export class GoogleCalendarSync {
 				requestBody: event
 			},
 			function (err: any, event: any) {
-			if (err) console.log(`GoogleCalendarSync Error Adding Event: ${event.name} on ${event.date}\n${err}`);
+			if (err) console.error(`GoogleCalendarSync Error Adding Event: ${event.name} on ${event.date}\n${err}`);
 			else {
-				that.plugin.full_calendar_sync.updateFullCalendarEventFile(file, {"synced-to-google": true, "google-id": event.data.id});
+				that.plugin.full_calendar_sync.updateFullCalendarEventFile(file, {"google-id": event.data.id});
 				e.id = event.data.id;
 				that.plugin.full_calendar_sync.addFullCalendarEventToDb(e);
-				console.log("Full Calendar DB:")
-				console.log(that.plugin.full_calendar_sync.eventDb);
 			}
 		});
 		this.checkFullCalendarIcsEventsForCopies();
+	}
+
+	updateCalendarEvent(id: string, event: GoogleCalendarEvent) {
+		const eventPayload = {
+			"summary": event.summary,
+			"start": {
+				"date": event.date,
+				"timezone": "UTC"
+			},
+			"end": {
+				"date": event.date,
+				"timezone": "UTC"
+			},
+			"description": event.description
+		};
+		this.calendar.events.update({
+			"calendarId": this.plugin.settings.calendar_id,
+			"eventId": id,
+			"requestBody": eventPayload
+		});
+	}
+
+	public syncFullCalendarEventToGoogle(id: string) {
+		const event = this.plugin.full_calendar_sync.getFullCalendarEventById(id);
+		if (event === undefined) return;
+		this.updateCalendarEvent(id, event);
+		this.eventDb[this.eventDb.findIndex((e, i, o) => e.id === id)] = event;
 	}
 
 	checkFullCalendarIcsEventsForCopies() {

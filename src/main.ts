@@ -23,12 +23,12 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 
 		await this.full_calendar_sync.setup();
 
-		this.app.workspace.onLayoutReady(() => {
+		this.app.workspace.onLayoutReady( () => {
 			this.registerEvent(this.app.vault.on("create", (file: TAbstractFile) => {
 				this.onFileCreate(file)
 			}));
-			this.registerEvent(this.app.vault.on("modify", (file: TAbstractFile) => {
-				this.onFileModify(file)
+			this.registerEvent(this.app.vault.on("modify", async (file: TAbstractFile) => {
+				await this.onFileModify(file)
 			}));
 			this.registerEvent(this.app.vault.on("rename", (file: TAbstractFile) => {
 				this.onFileRename(file)
@@ -70,12 +70,37 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		this.google_calendar_sync.checkAddCalendarEvent(event, file);
 	}
 
-	private onFileModify(file: TAbstractFile) {
+	private async onFileModify(file: TAbstractFile) {
 		if (file.path.split("/").slice(0, -1).join("/") !== this.settings.directory) return;
 		if (!(file instanceof TFile)) return;
-		this.app.vault.process(<TFile> file, (f) => {
+		let event: FullCalendarEvent | undefined;
+		// eslint-disable-next-line @typescript-eslint/no-this-alias
+		const that = this;
+		let gId = "";
+		await this.app.fileManager.processFrontMatter(<TFile> file, (f) => {
+			gId = f["google-id"];
+			event = that.full_calendar_sync.getFullCalendarEventById(gId);
+			const fcEvent = that.full_calendar_sync.parseFullCalendarEvent(file);
+			if (fcEvent === null || event === undefined) return f;
+			const fileNameData = that.full_calendar_sync.parseFullCalendarEventFileName(file.name);
+			if (fcEvent.date !== event.date) {
+				if (fileNameData !== null && fcEvent.date !== fileNameData.date) that.full_calendar_sync.updateFullCalendarEvent(gId, {date: fileNameData.date});
+				else that.full_calendar_sync.updateFullCalendarEvent(gId, {date: f["date"]})
+			}
+			if (fcEvent.summary !== event.summary) {
+				if (fileNameData !== null && fcEvent.summary !== fileNameData.summary) that.full_calendar_sync.updateFullCalendarEvent(gId, {date: fileNameData.date});
+				else that.full_calendar_sync.updateFullCalendarEvent(gId, {summary: event.summary})
+			}
 			return f;
 		})
+		if (event === undefined) return;
+		let desc = "\n" + event.link;
+		await this.app.vault.process(<TFile>file, (f) => {
+			desc = f.split("---").slice(2).join("---") + desc;
+			return f;
+		})
+		this.full_calendar_sync.updateFullCalendarEvent(gId, {description: desc});
+		this.google_calendar_sync.syncFullCalendarEventToGoogle(gId);
 	}
 
 	private onFileRename(file: TAbstractFile) {
