@@ -9,8 +9,10 @@ I installed the Full Calendar plugin, but was quickly annoyed by the fact that e
 This plugin, when complete, should be able to:
 - [x] add events created obsidian to google
 - [x] modify those events when they are updated in obsidian or google
-- [ ] remove events create in obsidian from Google calendar when they are deleted (I do not currently intend to try and make events created in google calendar writeable, but maybe in the future)
+- [ ] remove events create in obsidian from Google calendar when they are deleted
+- [ ] support events that are not all day (but not events starting and ending in different days, because Full Calendar does not support those)
 - [ ] only display each event once despite having a local copy in obsidian and a copy in Google calendar
+- [ ] optionally create local copies of events on google calendar (as seen via the ICS link) to allow them to be edited through obsidian
 
 This is intended to be used at the same time as an ICS link in Full Calendar.
 
