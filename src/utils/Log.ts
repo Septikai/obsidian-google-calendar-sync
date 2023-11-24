@@ -14,7 +14,6 @@ export function log_error(e: Error | PluginError): void {
 		notice.noticeEl.innerHTML = `<b>GoogleCalendarSync Error</b>:<br/>${e.message}<br/>Check console for more information`;
 		console.error(`GoogleCalendarSync Error:`, e.message, "\n", e.console_msg);
 	} else {
-		// @ts-ignore
 		notice.noticeEl.innerHTML = `<b>Templater Error</b>:<br/>${e.message}`;
 	}
 }

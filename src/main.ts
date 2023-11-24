@@ -17,15 +17,15 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 
 		this.google_calendar_sync = new GoogleCalendarSync(this)
 
-		await this.google_calendar_sync.setup();
-
 		this.full_calendar_sync = new FullCalendarSync(this)
 
 		await this.full_calendar_sync.setup();
 
+		await this.google_calendar_sync.setup();
+
 		this.app.workspace.onLayoutReady( () => {
-			this.registerEvent(this.app.vault.on("create", (file: TAbstractFile) => {
-				this.onFileCreate(file)
+			this.registerEvent(this.app.vault.on("create", async (file: TAbstractFile) => {
+				await this.onFileCreate(file)
 			}));
 			this.registerEvent(this.app.vault.on("modify", async (file: TAbstractFile) => {
 				await this.onFileModify(file)
@@ -63,9 +63,9 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private onFileCreate(file: TAbstractFile) {
+	private async onFileCreate(file: TAbstractFile) {
 		if (file.path.split("/").slice(0, -1).join("/") !== this.settings.directory || !(file instanceof TFile)) return;
-		const event: FullCalendarEvent | null = this.full_calendar_sync.parseFullCalendarEvent(file);
+		const event: FullCalendarEvent | null = await this.full_calendar_sync.parseFullCalendarEvent(file);
 		if (event === null) return;
 		this.google_calendar_sync.checkAddCalendarEvent(event, file);
 	}
@@ -77,10 +77,10 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		// eslint-disable-next-line @typescript-eslint/no-this-alias
 		const that = this;
 		let gId = "";
-		await this.app.fileManager.processFrontMatter(<TFile> file, (f) => {
+		await this.app.fileManager.processFrontMatter(<TFile> file, async (f) => {
 			gId = f["google-id"];
 			event = that.full_calendar_sync.getFullCalendarEventById(gId);
-			const fcEvent = that.full_calendar_sync.parseFullCalendarEvent(file);
+			const fcEvent = await that.full_calendar_sync.parseFullCalendarEvent(file);
 			if (fcEvent === null || event === undefined) return f;
 			const fileNameData = that.full_calendar_sync.parseFullCalendarEventFileName(file.name);
 			if (fcEvent.date !== event.date) {
@@ -91,12 +91,21 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 				if (fileNameData !== null && fcEvent.summary !== fileNameData.summary) that.full_calendar_sync.updateFullCalendarEvent(gId, {date: fileNameData.date});
 				else that.full_calendar_sync.updateFullCalendarEvent(gId, {summary: event.summary})
 			}
+			if (event.link == "" || event.link !== fcEvent.link) that.full_calendar_sync.updateFullCalendarEvent(gId, {link: `obsidian://open?vault=${that.app.vault.getName()}&file=${file.name.replace(".md", "")}`});
 			return f;
 		})
 		if (event === undefined) return;
-		let desc = "\n" + event.link;
+		let desc = event.link;
 		await this.app.vault.process(<TFile>file, (f) => {
-			desc = f.split("---").slice(2).join("---") + desc;
+			const dc = f.split("---").slice(2).join("---").trim();
+			// For some reason using that.google_calendar_sync.OBSIDIAN_LINK_REGEX fails to match
+			// every time, but this works despite being identical
+			const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(dc);
+			if (!matches) desc +=  "\n\n" + dc;
+			else desc = dc;
+			const arr = f.split("---").slice(0, 2);
+			arr.push("\n" + desc);
+			f = arr.join("---");
 			return f;
 		})
 		this.full_calendar_sync.updateFullCalendarEvent(gId, {description: desc});

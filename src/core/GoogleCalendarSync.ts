@@ -11,7 +11,6 @@ import {FullCalendarEvent} from "./FullCalendarSync";
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
-const OBSIDIAN_LINK_REGEX = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)/g
 
 export interface GoogleCalendarEvent {
 	id: string;
@@ -26,6 +25,7 @@ export class GoogleCalendarSync {
 	private tokenPath: string;
 	private eventDb = new Array<GoogleCalendarEvent>();
 	private calendar: calendar_v3.Calendar;
+	public OBSIDIAN_LINK_REGEX = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm;
 
 	constructor(private plugin: GoogleCalendarSyncPlugin) {
 
@@ -37,7 +37,7 @@ export class GoogleCalendarSync {
 		// created automatically when the authorization flow completes for the first
 		// time.
 		this.tokenPath = path.join(this.plugin.app.vault.adapter.getResourcePath(<string> this.plugin.manifest.dir).split("/").slice(3).join("/").split("?").slice(0, -1).join("?"), "token.json");
-		// @ts-ignore
+		// @ts-expect-error
 		this.authorise().then((auth) => this.initialiseCalendarField(auth));
 		this.checkFullCalendarIcsEventsForCopies();
 	}
@@ -54,7 +54,6 @@ export class GoogleCalendarSync {
 			return null;
 		}
 	}
-
 
 	/**
 	 * From https://developers.google.com/calendar/api/quickstart/nodejs
@@ -108,24 +107,50 @@ export class GoogleCalendarSync {
 		function notEmpty<TValue>(value: TValue | null | undefined){
 			return value !== undefined && value !== null;
 		}
-
-		events.filter(notEmpty).map((event: any) => {
-			if (!(this.eventDb.find(e => e["id"] == event["id"]))) {
+		for (const event of events.filter(notEmpty)) {
+			const localEvent = this.plugin.full_calendar_sync.getFullCalendarEventById(<string> event["id"]);
+			if (!localEvent) {
 				const desc = "description" in event ? event["description"] : "";
-				const matches = OBSIDIAN_LINK_REGEX.exec(desc);
+				const matches = this.OBSIDIAN_LINK_REGEX.exec(<string> desc);
 				const eventPayload = {
-					"id": event["id"],
-					"date": "date" in event["start"] ? event["start"]["date"] : event["start"]["dateTime"].split("T")[0],
-					"summary": "summary" in event ? event["summary"] : "Untitled",
-					"description": desc,
+					"id": <string> event["id"],
+					// @ts-expect-error
+					"date": "date" in event["start"] ? <string> event["start"]["date"] : (<string> event["start"]["dateTime"]).split("T")[0],
+					"summary": "summary" in event ? <string> event["summary"] : "Untitled",
+					"description": <string> desc,
 					"link": matches ? matches[1] : ""
 				}
 				this.eventDb.push(eventPayload);
-				this.plugin.full_calendar_sync.addFullCalendarEventToDb(eventPayload);
 			} else {
-				// TODO: update event locally when modified externally
+				let updateGoogle = false;
+				if (localEvent.summary !== event["summary"]) localEvent.summary = <string> event["summary"];
+				if (localEvent.description !== event["description"]) {
+					localEvent.description = <string> event["description"];
+					const matches = this.OBSIDIAN_LINK_REGEX.exec(<string> event["description"]);
+					if (!matches) {
+						localEvent.description = localEvent.link + "\n\n" + localEvent.description;
+						updateGoogle = true;
+					}
+				}
+				// @ts-expect-error
+				if ("date" in event["start"] && localEvent.date !== event["start"]["date"]) {
+					localEvent.date = <string> event["start"]["date"];
+				// @ts-expect-error
+				} else if ("dateTime" in event["start"] && localEvent.date !== event["start"]["dateTime"].split("T")[0]) {
+					localEvent.date = (<string> event["start"]["dateTime"]).split("T")[0];
+				}
+				this.plugin.full_calendar_sync.updateFullCalendarEvent(<string> event["id"], localEvent)
+				const file = await this.plugin.full_calendar_sync.getFullCalendarFileFromId(<string> event["id"]);
+				if (updateGoogle) this.updateCalendarEvent(<string> event["id"], localEvent)
+				else this.updateEventDb(<string> event["id"], localEvent);
+				if (file) {
+					this.plugin.full_calendar_sync.updateFullCalendarEventFile(this.plugin, file, {
+						summary: localEvent.summary,
+						date:  localEvent.date
+					}, localEvent.description)
+				}
 			}
-		});
+		}
 	}
 
 	checkAddCalendarEvent(event: FullCalendarEvent, file: TFile) {
@@ -161,12 +186,16 @@ export class GoogleCalendarSync {
 			function (err: any, event: any) {
 			if (err) console.error(`GoogleCalendarSync Error Adding Event: ${event.name} on ${event.date}\n${err}`);
 			else {
-				that.plugin.full_calendar_sync.updateFullCalendarEventFile(file, {"google-id": event.data.id});
+				that.plugin.full_calendar_sync.updateFullCalendarEventFile(that.plugin, file, {"google-id": event.data.id});
 				e.id = event.data.id;
 				that.plugin.full_calendar_sync.addFullCalendarEventToDb(e);
 			}
 		});
 		this.checkFullCalendarIcsEventsForCopies();
+	}
+
+	updateEventDb(id: string, event: GoogleCalendarEvent) {
+		this.eventDb[this.eventDb.findIndex((e) => e.id === id)] = event;
 	}
 
 	updateCalendarEvent(id: string, event: GoogleCalendarEvent) {
@@ -187,18 +216,17 @@ export class GoogleCalendarSync {
 			"eventId": id,
 			"requestBody": eventPayload
 		});
-		this.eventDb[this.eventDb.findIndex((e) => e.id === id)] = event;
+		this.updateEventDb(id, event);
 	}
 
 	public syncFullCalendarEventToGoogle(id: string) {
 		const event = this.plugin.full_calendar_sync.getFullCalendarEventById(id);
 		if (event === undefined) return;
 		this.updateCalendarEvent(id, event);
-		this.eventDb[this.eventDb.findIndex((e) => e.id === id)] = event;
+		this.updateEventDb(id, event);
 	}
 
 	checkFullCalendarIcsEventsForCopies() {
-		// @ts-ignore
 		console.log(this.plugin.app.plugins.plugins["obsidian-full-calendar"]);
 	}
 }
