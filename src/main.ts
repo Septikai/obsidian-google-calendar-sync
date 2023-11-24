@@ -30,8 +30,8 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 			this.registerEvent(this.app.vault.on("modify", async (file: TAbstractFile) => {
 				await this.onFileModify(file)
 			}));
-			this.registerEvent(this.app.vault.on("rename", (file: TAbstractFile) => {
-				this.onFileRename(file)
+			this.registerEvent(this.app.vault.on("rename", async (file: TAbstractFile) => {
+				await this.onFileRename(file)
 			}));
 			this.registerEvent(this.app.vault.on("delete", (file: TAbstractFile) => {
 				this.onFileDelete(file)
@@ -67,7 +67,7 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		if (file.path.split("/").slice(0, -1).join("/") !== this.settings.directory || !(file instanceof TFile)) return;
 		const event: FullCalendarEvent | null = await this.full_calendar_sync.parseFullCalendarEvent(file);
 		if (event === null) return;
-		this.google_calendar_sync.checkAddCalendarEvent(event, file);
+		await this.google_calendar_sync.checkAddCalendarEvent(event, file);
 	}
 
 	private async onFileModify(file: TAbstractFile) {
@@ -98,22 +98,26 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		let desc = event.link;
 		await this.app.vault.process(<TFile>file, (f) => {
 			const dc = f.split("---").slice(2).join("---").trim();
-			// For some reason using that.google_calendar_sync.OBSIDIAN_LINK_REGEX fails to match
-			// every time, but this works despite being identical
 			const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(dc);
 			if (!matches) desc +=  "\n\n" + dc;
 			else desc = dc;
-			const arr = f.split("---").slice(0, 2);
-			arr.push("\n" + desc);
-			f = arr.join("---");
-			return f;
+			const temp = f.split("---").slice(0, 2);
+			temp.push("\n" + desc);
+			return temp.join("---");
 		})
 		this.full_calendar_sync.updateFullCalendarEvent(gId, {description: desc});
 		this.google_calendar_sync.syncFullCalendarEventToGoogle(gId);
 	}
 
-	private onFileRename(file: TAbstractFile) {
+	private async onFileRename(file: TAbstractFile) {
 		if (file.path.split("/").slice(0, -1).join("/") !== this.settings.directory) return;
+		if (!(file instanceof TFile)) return;
+		const newEvent = await this.full_calendar_sync.parseFullCalendarEvent(file)
+		if (newEvent !== null) {
+			// TODO: update google to reflect newEvent
+		} else {
+			// TODO: update file to reflect google
+		}
 	}
 
 	private onFileDelete(file: TAbstractFile) {

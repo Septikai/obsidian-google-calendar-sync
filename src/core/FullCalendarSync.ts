@@ -65,27 +65,52 @@ export class FullCalendarSync {
 		this.eventDb.push(event);
 	}
 
-	public updateFullCalendarEventFile(plugin: GoogleCalendarSyncPlugin, file: TFile, fm?: object, desc?: string) {
+	public async updateFullCalendarEventFile(plugin: GoogleCalendarSyncPlugin, file: TFile, fm?: object, desc?: string) {
+		// If summary is passed into options, date must also be passed into options or summary wil be ignored
+		console.log("updating file");
+		let rename: string | null = null;
 		if (fm !== undefined) {
-			this.plugin.app.fileManager.processFrontMatter(file, (f: any) => {
+			await this.plugin.app.fileManager.processFrontMatter(file, (f: any) => {
 				for (const k in fm) {
-					f[k] = fm[k as keyof typeof fm];
+					if (k === "summary" && "date" as keyof typeof fm in fm) {
+						rename = fm["date" as keyof typeof fm] + " " + fm[k as keyof typeof fm] + ".md";
+					}
+					else if (k !== "summary") f[k] = fm[k as keyof typeof fm];
 				}
 				return f;
 			});
 		}
 		if (desc !== undefined) {
-			let matches = plugin.google_calendar_sync.OBSIDIAN_LINK_REGEX.exec(desc);
 			// eslint-disable-next-line @typescript-eslint/no-this-alias
 			const that = this;
-			this.plugin.app.vault.process(file, (f: any) => {
-				matches = plugin.google_calendar_sync.OBSIDIAN_LINK_REGEX.exec(desc);
+			await this.plugin.app.vault.process(file, (f: any) => {
+				const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(desc);
 				let description = desc;
 				if (!matches) description = `obsidian://open?vault=${that.plugin.app.vault.getName()}&file=${file.name.replace(".md", "")}` + "\n\n" + description;
-				let fList = f.split("---");
-				fList = fList.slice(0, 2);
-				fList.push("\n\n" + description);
-				return fList.join("---");
+				const temp = f.split("---").slice(0, 2);
+				temp.push("\n" + description);
+				return temp.join("---");
+			})
+		}
+		if (rename !== null) {
+			const newPath = file.path.split("/").slice(0, -1);
+			newPath.push(rename);
+			await this.plugin.app.vault.rename(file, newPath.join("/"))
+			// eslint-disable-next-line @typescript-eslint/no-this-alias
+			const that = this;
+			await this.plugin.app.vault.process(file, (f) => {
+				let description = f.split("---").slice(2).join("---").trim();
+				const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(description);
+
+				if (matches !== null) {
+					description = description.replace(/^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm, `obsidian://open?vault=${that.plugin.app.vault.getName()}&file=${(<string> rename).replace(".md", "")}`);
+				} else {
+					description = `obsidian://open?vault=${that.plugin.app.vault.getName()}&file=${(<string> rename).replace(".md", "")}` + "\n\n" + description;
+				}
+
+				const temp = f.split("---").slice(0, 2);
+				temp.push("\n" + description);
+				return temp.join("---");
 			})
 		}
 	}
@@ -102,15 +127,12 @@ export class FullCalendarSync {
 			let desc = fileLink;
 			await this.plugin.app.vault.process(file, (f: string) => {
 				const dc = f.split("---").slice(2).join("---").trim();
-				// For some reason using that.google_calendar_sync.OBSIDIAN_LINK_REGEX where
-				// `const that = this` fails to match every time, but this works despite being identical
 				const linkMatches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.test(dc);
 				if (!linkMatches) desc +=  "\n\n" + dc;
 				else desc = dc;
-				const arr = f.split("---").slice(0, 2);
-				arr.push("\n" + desc);
-				f = arr.join("---");
-				return f;
+				const temp = f.split("---").slice(0, 2);
+				temp.push("\n" + desc);
+				return temp.join("---");
 			})
 			const name = matches[2].trim().length > 0 ? matches[2].trim() : "Untitled";
 			const date = matches[1];

@@ -25,7 +25,6 @@ export class GoogleCalendarSync {
 	private tokenPath: string;
 	private eventDb = new Array<GoogleCalendarEvent>();
 	private calendar: calendar_v3.Calendar;
-	public OBSIDIAN_LINK_REGEX = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm;
 
 	constructor(private plugin: GoogleCalendarSyncPlugin) {
 
@@ -95,6 +94,7 @@ export class GoogleCalendarSync {
 	}
 
 	async fetchGoogleCalendarEvents() {
+		console.log("listing");
 		const res = await this.calendar.events.list({
 			calendarId: 'primary',
 			singleEvents: true,
@@ -104,14 +104,11 @@ export class GoogleCalendarSync {
 		if (!events || events.length === 0) {
 			return;
 		}
-		function notEmpty<TValue>(value: TValue | null | undefined){
-			return value !== undefined && value !== null;
-		}
-		for (const event of events.filter(notEmpty)) {
+		for (const event of events.filter(e => e !== undefined && e !== null)) {
 			const localEvent = this.plugin.full_calendar_sync.getFullCalendarEventById(<string> event["id"]);
 			if (!localEvent) {
 				const desc = "description" in event ? event["description"] : "";
-				const matches = this.OBSIDIAN_LINK_REGEX.exec(<string> desc);
+				const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(<string> desc);
 				const eventPayload = {
 					"id": <string> event["id"],
 					// @ts-expect-error
@@ -126,7 +123,7 @@ export class GoogleCalendarSync {
 				if (localEvent.summary !== event["summary"]) localEvent.summary = <string> event["summary"];
 				if (localEvent.description !== event["description"]) {
 					localEvent.description = <string> event["description"];
-					const matches = this.OBSIDIAN_LINK_REGEX.exec(<string> event["description"]);
+					const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(<string> event["description"]);
 					if (!matches) {
 						localEvent.description = localEvent.link + "\n\n" + localEvent.description;
 						updateGoogle = true;
@@ -141,10 +138,11 @@ export class GoogleCalendarSync {
 				}
 				this.plugin.full_calendar_sync.updateFullCalendarEvent(<string> event["id"], localEvent)
 				const file = await this.plugin.full_calendar_sync.getFullCalendarFileFromId(<string> event["id"]);
+				console.log("updating calendar without syncing");
 				if (updateGoogle) this.updateCalendarEvent(<string> event["id"], localEvent)
 				else this.updateEventDb(<string> event["id"], localEvent);
 				if (file) {
-					this.plugin.full_calendar_sync.updateFullCalendarEventFile(this.plugin, file, {
+					await this.plugin.full_calendar_sync.updateFullCalendarEventFile(this.plugin, file, {
 						summary: localEvent.summary,
 						date:  localEvent.date
 					}, localEvent.description)
@@ -153,7 +151,11 @@ export class GoogleCalendarSync {
 		}
 	}
 
-	checkAddCalendarEvent(event: FullCalendarEvent, file: TFile) {
+	getGoogleCalendarEventById(id: string): GoogleCalendarEvent | undefined {
+		return this.eventDb.find((e) => e.id === id);
+	}
+
+	async checkAddCalendarEvent(event: FullCalendarEvent, file: TFile) {
 		const storedEvent = this.eventDb.find((e) => e.date === event.date && e.summary === event.summary);
 		if (storedEvent === undefined) {
 			this.addCalendarEvent(event, file);
@@ -179,14 +181,15 @@ export class GoogleCalendarSync {
 		}
 		// eslint-disable-next-line @typescript-eslint/no-this-alias
 		const that = this;
+		console.log("inserting");
 		this.calendar.events.insert({
 				calendarId: "primary",
 				requestBody: event
 			},
-			function (err: any, event: any) {
+			async function (err: any, event: any) {
 			if (err) console.error(`GoogleCalendarSync Error Adding Event: ${event.name} on ${event.date}\n${err}`);
 			else {
-				that.plugin.full_calendar_sync.updateFullCalendarEventFile(that.plugin, file, {"google-id": event.data.id});
+				await that.plugin.full_calendar_sync.updateFullCalendarEventFile(that.plugin, file, {"google-id": event.data.id});
 				e.id = event.data.id;
 				that.plugin.full_calendar_sync.addFullCalendarEventToDb(e);
 			}
@@ -211,6 +214,7 @@ export class GoogleCalendarSync {
 			},
 			"description": event.description
 		};
+		console.log("updating");
 		this.calendar.events.update({
 			"calendarId": this.plugin.settings.calendar_id,
 			"eventId": id,
@@ -222,11 +226,12 @@ export class GoogleCalendarSync {
 	public syncFullCalendarEventToGoogle(id: string) {
 		const event = this.plugin.full_calendar_sync.getFullCalendarEventById(id);
 		if (event === undefined) return;
-		this.updateCalendarEvent(id, event);
-		this.updateEventDb(id, event);
+		console.log("syncing");
+		this.updateCalendarEvent(id, event)
 	}
 
 	checkFullCalendarIcsEventsForCopies() {
-		console.log(this.plugin.app.plugins.plugins["obsidian-full-calendar"]);
+		// TODO: prevent readonly ics events from appearing where there is a local markdown file
+		// console.log(this.plugin.app.plugins.plugins["obsidian-full-calendar"]);
 	}
 }
