@@ -23,7 +23,7 @@ export interface GoogleCalendarEvent {
 export class GoogleCalendarSync {
 	private credentialsPath: string;
 	private tokenPath: string;
-	private eventDb = new Array<GoogleCalendarEvent>();
+	public eventDb = new Array<GoogleCalendarEvent>();
 	private calendar: calendar_v3.Calendar;
 
 	constructor(private plugin: GoogleCalendarSyncPlugin) {
@@ -142,11 +142,19 @@ export class GoogleCalendarSync {
 				if (updateGoogle) this.updateCalendarEvent(<string> event["id"], localEvent)
 				else this.updateEventDb(<string> event["id"], localEvent);
 				if (file) {
-					await this.plugin.full_calendar_sync.updateFullCalendarEventFile(this.plugin, file, {
+					await this.plugin.full_calendar_sync.updateFullCalendarEventFile(this.plugin, file, <string> event["id"], {
 						summary: localEvent.summary,
 						date:  localEvent.date
 					}, localEvent.description)
 				}
+				const eventPayload = {
+					"id": localEvent.id,
+					"date": localEvent.date,
+					"summary": "summary" in event ? <string> event["summary"] : "Untitled",
+					"description": localEvent.description,
+					"link": localEvent.link
+				}
+				this.eventDb.push(eventPayload);
 			}
 		}
 	}
@@ -189,7 +197,7 @@ export class GoogleCalendarSync {
 			async function (err: any, event: any) {
 			if (err) console.error(`GoogleCalendarSync Error Adding Event: ${event.name} on ${event.date}\n${err}`);
 			else {
-				await that.plugin.full_calendar_sync.updateFullCalendarEventFile(that.plugin, file, {"google-id": event.data.id});
+				await that.plugin.full_calendar_sync.updateFullCalendarEventFile(that.plugin, file, event.data.id, {"google-id": event.data.id});
 				e.id = event.data.id;
 				that.plugin.full_calendar_sync.addFullCalendarEventToDb(e);
 			}

@@ -114,9 +114,52 @@ export default class GoogleCalendarSyncPlugin extends Plugin {
 		if (!(file instanceof TFile)) return;
 		const newEvent = await this.full_calendar_sync.parseFullCalendarEvent(file)
 		if (newEvent !== null) {
-			// TODO: update google to reflect newEvent
+			// Update the Google file to match this one
+			const googleEvent = this.google_calendar_sync.getGoogleCalendarEventById(newEvent.id);
+			if (googleEvent === undefined) {
+				console.log(this.google_calendar_sync.eventDb);
+				console.error(`GoogleCalendarSync Error Renaming Event: Error 1 attempting to rename event ${newEvent.id}`);
+				return;
+			}
+			googleEvent.summary = newEvent.summary;
+			googleEvent.date = newEvent.date;
+			const newPath = file.path.split("/").slice(0, -1);
+			newPath.push(newEvent.date + " " + newEvent.summary);
+			// eslint-disable-next-line @typescript-eslint/no-this-alias
+			const that = this;
+			let description = "";
+			await this.app.vault.process(file, (f) => {
+				description = f.split("---").slice(2).join("---").trim();
+				const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(description);
+
+				if (matches !== null) {
+					description = description.replace(/^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm, `obsidian://open?vault=${that.app.vault.getName()}&file=${(newEvent.date + " " + newEvent.summary).replace(".md", "")}`);
+				} else {
+					description = `obsidian://open?vault=${that.app.vault.getName()}&file=${(newEvent.date + " " + newEvent.summary).replace(".md", "")}` + "\n\n" + description;
+				}
+
+				const temp = f.split("---").slice(0, 2);
+				temp.push("\n" + description);
+				return temp.join("---");
+			});
+			this.full_calendar_sync.updateFullCalendarEvent(newEvent.id, {...newEvent, description: description})
+
+			this.google_calendar_sync.updateCalendarEvent(newEvent.id, googleEvent);
 		} else {
-			// TODO: update file to reflect google
+			// Reset this file to match the Google one
+			let id = "";
+			await this.app.fileManager.processFrontMatter(file, (f: any) => {
+				id = f["id"];
+				return f;
+			})
+			const googleEvent = this.google_calendar_sync.getGoogleCalendarEventById(id);
+			if (googleEvent === undefined) {
+				console.error(`GoogleCalendarSync Error Renaming Event: Error 2 attempting to rename event ${id}`);
+				return;
+			}
+			await this.full_calendar_sync.updateFullCalendarEventFile(this, file, id, {
+				summary: googleEvent.summary, date: googleEvent.date, link: googleEvent.link
+			}, googleEvent.description);
 		}
 	}
 

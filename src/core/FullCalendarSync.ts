@@ -2,8 +2,6 @@ import GoogleCalendarSyncPlugin from "../main";
 import {TFile} from "obsidian";
 import {get_tfiles_from_folder} from "../utils/Utils";
 
-const CALENDAR_EVENT_REGEX = /^(\d{4}-\d{2}-\d{2})(.*).md/g;
-
 export interface FullCalendarEvent {
 	id: string;
 	date: string;
@@ -42,7 +40,7 @@ export class FullCalendarSync {
 	}
 
 	public parseFullCalendarEventFileName(name: string) {
-		const matches = CALENDAR_EVENT_REGEX.exec(name)
+		const matches = /^(\d{4}-\d{2}-\d{2})(.*).md/g.exec(name)
 		if (!matches) return null;
 		const summary = matches[2].trim().length > 0 ? matches[2].trim() : "Untitled";
 		const date = matches[1];
@@ -65,10 +63,11 @@ export class FullCalendarSync {
 		this.eventDb.push(event);
 	}
 
-	public async updateFullCalendarEventFile(plugin: GoogleCalendarSyncPlugin, file: TFile, fm?: object, desc?: string) {
+	public async updateFullCalendarEventFile(plugin: GoogleCalendarSyncPlugin, file: TFile, id: string, fm?: object, desc?: string) {
 		// If summary is passed into options, date must also be passed into options or summary wil be ignored
 		console.log("updating file");
 		let rename: string | null = null;
+		let description = "";
 		if (fm !== undefined) {
 			await this.plugin.app.fileManager.processFrontMatter(file, (f: any) => {
 				for (const k in fm) {
@@ -83,9 +82,9 @@ export class FullCalendarSync {
 		if (desc !== undefined) {
 			// eslint-disable-next-line @typescript-eslint/no-this-alias
 			const that = this;
+			description = desc;
 			await this.plugin.app.vault.process(file, (f: any) => {
 				const matches = /^(obsidian:\/\/open\?vault=.+&file=\d{4}-\d{2}-\d{2}.*)$/gm.exec(desc);
-				let description = desc;
 				if (!matches) description = `obsidian://open?vault=${that.plugin.app.vault.getName()}&file=${file.name.replace(".md", "")}` + "\n\n" + description;
 				const temp = f.split("---").slice(0, 2);
 				temp.push("\n" + description);
@@ -113,10 +112,12 @@ export class FullCalendarSync {
 				return temp.join("---");
 			})
 		}
+		if (desc !== null) this.updateFullCalendarEvent(id, {...fm, description: description})
+		else this.updateFullCalendarEvent(id, {...fm})
 	}
 
 	public async parseFullCalendarEvent(file: TFile): Promise<FullCalendarEvent | null> {
-		const matches = CALENDAR_EVENT_REGEX.exec(file.name)
+		const matches = /^(\d{4}-\d{2}-\d{2})(.*).md/g.exec(file.name)
 		if (matches) {
 			let id = "";
 			await this.plugin.app.fileManager.processFrontMatter(file, (f: any) => {
