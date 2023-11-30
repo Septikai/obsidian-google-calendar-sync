@@ -14,7 +14,7 @@ This plugin, when complete, should be able to:
 - [ ] not display events from an ICS link if there is a note in obsidian representing that event (to prevent duplicate events, where one is from the notes and one is from the ICS link)
 - [ ] optionally create local copies of events already on or created on google calendar (as seen via the ICS link) to allow them to be edited through obsidian
 
-This is intended to be used at the same time as an ICS link in Full Calendar.
+This is intended to be used at the same time as an ICS link in Full Calendar, and will not work if you do not have the Full Calendar plugin installed and enabled.
 
 ## Current State
 
